@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>小正方体 3D 观察器</title>
+<style>
+:root{color-scheme:light dark;--bg:#f7f7f8;--fg:#111;--card:#fff;--muted:#666;--line:#d7d7dc;--accent:#2f6fed}*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--fg)}main{max-width:760px;margin:auto;padding:16px}.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.title{font-size:22px;font-weight:750}.sub{font-size:14px;color:var(--muted);margin-top:5px;line-height:1.5}.panel{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}.stage{position:relative;height:min(68vw,520px);min-height:360px;touch-action:none;background:linear-gradient(#fafbff,#eef2f7)}canvas{width:100%;height:100%;display:block}.tip{position:absolute;left:12px;bottom:10px;font-size:12px;color:#59606c;background:rgba(255,255,255,.82);padding:6px 9px;border-radius:10px}.bar{display:flex;gap:8px;flex-wrap:wrap;padding:12px;border-top:1px solid var(--line)}button{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:10px 14px;min-height:44px;font-size:15px}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.info{font-size:14px;color:var(--muted);line-height:1.6;margin-top:12px;padding:0 2px}.badge{display:inline-block;padding:2px 7px;border-radius:999px;background:#eaf0ff;color:#244fae;font-weight:650}@media (prefers-color-scheme:dark){:root{--bg:#111214;--fg:#f3f4f6;--card:#191b1f;--muted:#a7abb4;--line:#30343b}.stage{background:linear-gradient(#181b21,#111317)}.tip{background:rgba(20,22,26,.82);color:#c7cbd3}.badge{background:#1d315e;color:#b9cdff}}
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <div><div class="title">小正方体 3D 观察器</div><div class="sub">单指拖动旋转 · 双指捏合缩放 · 手机浏览器直接使用</div></div>
+    <button id="reset">复位</button>
+  </div>
+  <section class="panel">
+    <div class="stage" id="stage"><canvas id="cv" aria-label="可旋转的小正方体三维模型"></canvas><div class="tip">拖动方块查看各个方向</div></div>
+    <div class="bar">
+      <button class="primary" data-view="iso">立体视角</button>
+      <button data-view="front">从前面看</button>
+      <button data-view="left">从左面看</button>
+      <button data-view="top">从上面看</button>
+    </div>
+  </section>
+  <div class="info">按题图①搭建：平面位置高度依次为 <span class="badge">3、1、1、2、1</span>，共 8 个小正方体。</div>
+</main>
+<script>
+(()=>{
+const canvas=document.getElementById('cv'),stage=document.getElementById('stage'),ctx=canvas.getContext('2d');
+const cells=[{x:0,z:0,h:3},{x:0,z:1,h:1},{x:1,z:1,h:1},{x:2,z:1,h:2},{x:1,z:2,h:1}];
+const cubes=[];cells.forEach(c=>{for(let y=0;y<c.h;y++)cubes.push({x:c.x,y,z:c.z})});
+let yaw=-0.65,pitch=-0.5,zoom=1,drag=false,lastX=0,lastY=0,pointers=new Map(),pinch0=null;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function resize(){const r=stage.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=Math.max(1,Math.round(r.width*d));canvas.height=Math.max(1,Math.round(r.height*d));ctx.setTransform(d,0,0,d,0,0);draw()}
+function rot(p){let x=p.x-1,y=p.y-0.75,z=p.z-1;let cy=Math.cos(yaw),sy=Math.sin(yaw),x1=x*cy-z*sy,z1=x*sy+z*cy;let cp=Math.cos(pitch),sp=Math.sin(pitch),y1=y*cp-z1*sp,z2=y*sp+z1*cp;return{x:x1,y:y1,z:z2}}
+function proj(p,w,h){const q=rot(p),f=220*zoom,depth=6+q.z,s=f/depth;return{x:w/2+q.x*s,y:h/2-q.y*s,z:q.z,s}}
+const faces=[[[0,0,0],[1,0,0],[1,1,0],[0,1,0]],[[0,0,1],[0,1,1],[1,1,1],[1,0,1]],[[0,0,0],[0,1,0],[0,1,1],[0,0,1]],[[1,0,0],[1,0,1],[1,1,1],[1,1,0]],[[0,1,0],[1,1,0],[1,1,1],[0,1,1]],[[0,0,0],[0,0,1],[1,0,1],[1,0,0]]];
+function draw(){const w=stage.clientWidth,h=stage.clientHeight;ctx.clearRect(0,0,w,h);let polys=[];for(const c of cubes){for(let fi=0;fi<faces.length;fi++){const pts=faces[fi].map(v=>({x:c.x+v[0],y:c.y+v[1],z:c.z+v[2]})),rp=pts.map(rot);const a=rp[0],b=rp[1],d=rp[2];const ux=b.x-a.x,uy=b.y-a.y,uz=b.z-a.z,vx=d.x-a.x,vy=d.y-a.y,vz=d.z-a.z,nz=ux*vy-uy*vx; if(nz>=0)continue; const pp=pts.map(p=>proj(p,w,h)),depth=pp.reduce((s,p)=>s+p.z,0)/4;polys.push({pp,depth,fi})}}
+polys.sort((a,b)=>b.depth-a.depth);for(const poly of polys){ctx.beginPath();poly.pp.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();const shades=['#d7dbe2','#e8ebf0','#c9ced8','#dfe3ea','#f4f6f9','#bcc3ce'];ctx.fillStyle=shades[poly.fi];ctx.fill();ctx.strokeStyle='#3f4650';ctx.lineWidth=1.15;ctx.stroke()}}
+function preset(v){if(v==='iso'){yaw=-0.65;pitch=-0.5;zoom=1}else if(v==='front'){yaw=0;pitch=0;zoom=1.05}else if(v==='left'){yaw=-Math.PI/2;pitch=0;zoom=1.05}else if(v==='top'){yaw=0;pitch=-1.48;zoom=1.02}draw()}
+stage.addEventListener('pointerdown',e=>{stage.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1){drag=true;lastX=e.clientX;lastY=e.clientY}else if(pointers.size===2){const p=[...pointers.values()];pinch0={d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y),z:zoom}}});
+stage.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1&&drag){yaw-=(e.clientX-lastX)*.012;pitch=clamp(pitch+(e.clientY-lastY)*.012,-1.48,1.2);lastX=e.clientX;lastY=e.clientY;draw()}else if(pointers.size===2&&pinch0){const p=[...pointers.values()],d=Math.max(10,Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y));zoom=clamp(pinch0.z*d/pinch0.d,.65,1.9);draw()}});
+function end(e){pointers.delete(e.pointerId);if(pointers.size<2)pinch0=null;if(!pointers.size)drag=false}stage.addEventListener('pointerup',end);stage.addEventListener('pointercancel',end);
+stage.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*(e.deltaY>0?.92:1.08),.65,1.9);draw()},{passive:false});
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>preset(b.dataset.view)));document.getElementById('reset').addEventListener('click',()=>preset('iso'));new ResizeObserver(resize).observe(stage);resize();
+})();
+</script>
+</body>
+</html>
